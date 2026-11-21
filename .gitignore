@@ -7,4 +7,6 @@ wheels/
 *.egg-info
 
 # Virtual environments
-.venv
+.env
+.pytest_cache/
+.ruff_cache/
