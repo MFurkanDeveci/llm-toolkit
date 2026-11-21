@@ -1,11 +1,8 @@
 [project]
 name = "llm-toolkit"
 version = "0.1.0"
-description = "Add your description here"
+description = "Modül 2: sağlayıcıdan bağımsız LLM araç seti"
 readme = "README.md"
-authors = [
-    { name = "Furkan", email = "mfdeveci.027@gmail.com" }
-]
 requires-python = ">=3.12"
 dependencies = [
     "anthropic>=2.12.0",
@@ -15,10 +12,10 @@ dependencies = [
 ]
 
 [project.scripts]
-llm-toolkit = "llm_toolkit:main"
+llm = "llm_toolkit.cli:main"
 
 [build-system]
-requires = ["uv_build>=0.13.9,<0.14.0"]
+requires = ["uv_build>=0.11.32,<0.12.0"]
 build-backend = "uv_build"
 
 [dependency-groups]
@@ -26,3 +23,12 @@ dev = [
     "pytest>=9.2.0",
     "ruff>=0.17.6",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
