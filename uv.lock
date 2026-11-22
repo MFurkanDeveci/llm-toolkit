@@ -490,6 +490,7 @@ source = { editable = "." }
 dependencies = [
     { name = "anthropic" },
     { name = "httpx" },
+    { name = "numpy" },
     { name = "ollama" },
     { name = "pydantic-settings" },
 ]
@@ -505,6 +506,7 @@ dev = [
 requires-dist = [
     { name = "anthropic", specifier = ">=2.12.0" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "numpy", specifier = ">=2.5.5" },
     { name = "ollama", specifier = ">=0.6.3" },
     { name = "pydantic-settings", specifier = ">=2.16.3" },
 ]
