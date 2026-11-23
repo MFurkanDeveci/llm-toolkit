@@ -1,0 +1,342 @@
+{
+  "run_id": "20261123-133036",
+  "created_at": "2026-11-23T13:30:36.688644",
+  "setup": {
+    "cevap_modeli": "llama3.2:3b",
+    "yargıç": "claude-haiku-5-5",
+    "k": 3,
+    "parça_sayısı": 16,
+    "embedding": "bge-m3"
+  },
+  "summary": {
+    "tür": "tümü",
+    "soru": 20,
+    "ifade_başarısı": 0.7,
+    "yargıç_doğru": 0.8,
+    "yargıç_sadık": 0.75,
+    "maliyet": 0.0039893,
+    "ort_süre": 0.5047499999999999
+  },
+  "results": [
+    {
+      "question_id": "iade-sure",
+      "category": "olgu",
+      "question": "Bir kitabı kaç gün içinde iade edebilirim?",
+      "answer": "14 gün. [iade.md #0]",
+      "keyword_score": 1.0,
+      "refused": false,
+      "verdict": {
+        "correct": true,
+        "faithful": true,
+        "reason": "Cevap 14 gün bilgisini veriyor ve bu bilgi kaynak iade.md #0'da teslimat tarihinden itibaren 14 gün olarak geçiyor."
+      },
+      "answer_cost": 0.0,
+      "judge_cost": 0.0001614,
+      "latency_s": 1.9369999999999998
+    },
+    {
+      "question_id": "iade-odeme",
+      "category": "olgu",
+      "question": "İadem onaylanınca para kartıma ne zaman yatar?",
+      "answer": "İade onaylandıktan sonra para kartınıza ödeme 7 iş günü içinde geri yansır.",
+      "keyword_score": 1.0,
+      "refused": false,
+      "verdict": {
+        "correct": true,
+        "faithful": true,
+        "reason": "Cevap, iadenin kartа 7 iş günü içinde geri yansıdığını belirtiyor ve bu bilgi kaynak iade.md #4 ve #5'te açıkça geçiyor."
+      },
+      "answer_cost": 0.0,
+      "judge_cost": 0.0001675,
+      "latency_s": 0.344
+    },
+    {
+      "question_id": "iade-kontrol",
+      "category": "olgu",
+      "question": "İade ettiğim ürün depoya ulaşınca kaç günde kontrol edilir?",
+      "answer": "Ürün depomuza ulaştıktan sonra 3 iş günü içinde kontrol edilir.",
+      "keyword_score": 1.0,
+      "refused": false,
+      "verdict": {
+        "correct": true,
+        "faithful": true,
+        "reason": "Cevap, beklenen 3 iş günü bilgisini doğru veriyor ve bu bilgi kaynak #4 ile #3'te açıkça geçiyor."
+      },
+      "answer_cost": 0.0,
+      "judge_cost": 0.00016060000000000003,
+      "latency_s": 0.35
+    },
+    {
+      "question_id": "kargo-ayni-gun",
+      "category": "olgu",
+      "question": "Siparişim aynı gün kargoya verilir mi?",
+      "answer": "Evet, siparişler saat 14.00'e kadar verilirse aynı gün kargoya teslim edilir. [kargo.md #0]",
+      "keyword_score": 1.0,
+      "refused": false,
+      "verdict": {
+        "correct": true,
+        "faithful": true,
+        "reason": "Cevap, 14.00'e kadar verilen siparişlerin aynı gün kargoya verildiği bilgisini doğru aktarıyor ve bu bilgi kargo.md #0 kaynağında yer alıyor."
+      },
+      "answer_cost": 0.0,
+      "judge_cost": 0.0001707,
+      "latency_s": 0.475
+    },
+    {
+      "question_id": "kargo-yurtdisi",
+      "category": "olgu",
+      "question": "Yurt dışına gönderim yapıyor musunuz?",
+      "answer": "Hayır, yurt dışına gönderim yapılmamaktadır. [iade.md #0]",
+      "keyword_score": 1.0,
+      "refused": false,
+      "verdict": {
+        "correct": true,
+        "faithful": true,
+        "reason": "Cevap, yurt dışına gönderim yapılmadığını beklenen bilgiyle uyumlu şekilde söylüyor ve bu bilgi kaynaklarda geçiyor; kaynak etiketi biçimi değerlendirmeye alınmadı."
+      },
+      "answer_cost": 0.0,
+      "judge_cost": 0.0001729,
+      "latency_s": 0.353
+    },
+    {
+      "question_id": "uyelik-oran",
+      "category": "olgu",
+      "question": "Her alışverişte ne kadar puan kazanırım?",
+      "answer": "Her alışverişte sipariş tutarının yüzde 5'i kadar Kuzey Puan kazanır. [iade.md #1]",
+      "keyword_score": 1.0,
+      "refused": false,
+      "verdict": {
+        "correct": true,
+        "faithful": true,
+        "reason": "Cevap, sipariş tutarının yüzde 5'i kadar Kuzey Puan kazanıldığı beklenen bilgisiyle uyumlu ve kaynaklarda bu bilgi açıkça geçiyor."
+      },
+      "answer_cost": 0.0,
+      "judge_cost": 0.0001737,
+      "latency_s": 0.425
+    },
+    {
+      "question_id": "uyelik-silinme",
+      "category": "olgu",
+      "question": "Kullanmadığım puanlar ne zaman silinir?",
+      "answer": "Kullanılmayan puanlar, kazanıldıkları tarihten itibaren 1 yıl sonra silinir.",
+      "keyword_score": 1.0,
+      "refused": false,
+      "verdict": {
+        "correct": true,
+        "faithful": true,
+        "reason": "Cevap, kullanılmayan puanların kazanıldıkları tarihten itibaren 1 yıl sonra silineceği bilgisini beklenen bilgiyle uyumlu biçimde veriyor ve bu bilgi kaynak uyelik.md #2'de geçiyor."
+      },
+      "answer_cost": 0.0,
+      "judge_cost": 0.00018210000000000004,
+      "latency_s": 0.424
+    },
+    {
+      "question_id": "uyelik-sifre",
+      "category": "olgu",
+      "question": "Şifremi unuttum, ne yapmalıyım?",
+      "answer": "Şifremi unuttuğunda, giriş sayfasındaki \"Şifremi Unuttum\" bağlantısını tıklamanızı öneririm. Bu, e-posta adresinize bir yenileme bağlantısı gönderilir.",
+      "keyword_score": 1.0,
+      "refused": false,
+      "verdict": {
+        "correct": true,
+        "faithful": true,
+        "reason": "Cevap, giriş sayfasındaki Şifremi Unuttum bağlantısına tıklanması gerektiğini belirtiyor ve bu bilgi kaynak uyelik.md #3'te yer alıyor."
+      },
+      "answer_cost": 0.0,
+      "judge_cost": 0.0001699,
+      "latency_s": 0.654
+    },
+    {
+      "question_id": "anlam-geri-gonder",
+      "category": "anlam",
+      "question": "Kitabı geri göndermek için kaç günüm var?",
+      "answer": "Kitabı iade etmek için 14 gün var.",
+      "keyword_score": 1.0,
+      "refused": false,
+      "verdict": {
+        "correct": true,
+        "faithful": true,
+        "reason": "Cevap 14 günlük iade süresini doğru veriyor ve bu bilgi kaynak iade.md #0'da açıkça geçiyor."
+      },
+      "answer_cost": 0.0,
+      "judge_cost": 0.0001538,
+      "latency_s": 0.301
+    },
+    {
+      "question_id": "anlam-ekitap",
+      "category": "anlam",
+      "question": "Okuduğum e-kitabı geri verebilir miyim?",
+      "answer": "Hayır, indirildikten sonra e-kitaplar geri verilemez.",
+      "keyword_score": 0.0,
+      "refused": false,
+      "verdict": {
+        "correct": true,
+        "faithful": true,
+        "reason": "Cevap, e-kitapların indirildikten sonra iade edilemeyeceği bilgisini doğru ve kaynaklara uygun şekilde veriyor."
+      },
+      "answer_cost": 0.0,
+      "judge_cost": 0.00015690000000000002,
+      "latency_s": 0.345
+    },
+    {
+      "question_id": "anlam-evde-yok",
+      "category": "anlam",
+      "question": "Kargo geldiğinde evde olmazsam paketim ne olur?",
+      "answer": "Paketinizi alamazsanız, paket 3 gün boyunca shubede bekletilir ve kargo görevlisi bir bildirim bırakır.",
+      "keyword_score": 1.0,
+      "refused": false,
+      "verdict": {
+        "correct": true,
+        "faithful": true,
+        "reason": "Cevap, paketin 3 gün şubede bekletildiğini ve bildirim bırakıldığını belirtiyor; bu bilgi kaynak #4'te geçiyor. 'shubede' yazım hatası içeriği etkilemiyor."
+      },
+      "answer_cost": 0.0,
+      "judge_cost": 0.00017260000000000002,
+      "latency_s": 0.486
+    },
+    {
+      "question_id": "anlam-yanlis-urun",
+      "category": "anlam",
+      "question": "Bana yanlış kitap gönderildi, iade için süre sınırı var mı?",
+      "answer": "Kartınıza ödemenin geri yansızlığı 7 iş günü içinde gerçekleşmez. Hasarlı ya da yanlış gelen ürünlerde süre sınırı yoktur, müşterimiz fotoğrafla birlikte customer service'e başvurabilir.",
+      "keyword_score": 1.0,
+      "refused": false,
+      "verdict": {
+        "correct": true,
+        "faithful": false,
+        "reason": "Cevabın ana bilgisi, yanlış ürünlerde süre sınırının olmadığı, beklenen bilgiyle uyumlu; ancak 7 iş günü ödeme süresini kaynakla çelişecek şekilde olumsuz ifade ediyor ve 'customer service' gibi kaynakta olmayan bir ifade kullanıyor."
+      },
+      "answer_cost": 0.0,
+      "judge_cost": 0.0003888,
+      "latency_s": 0.608
+    },
+    {
+      "question_id": "kesin-kargo-ucret",
+      "category": "kesin",
+      "question": "Kargo ücreti kaç TL?",
+      "answer": "Kargo ücreti 250 TL'den daha yüksek olan siparişlerde ücretsiz, altındaki siparişler için 39,90 TL'dir.",
+      "keyword_score": 1.0,
+      "refused": false,
+      "verdict": {
+        "correct": true,
+        "faithful": true,
+        "reason": "Cevap, 250 TL altındaki siparişler için kargo ücretinin 39,90 TL olduğunu doğru belirtiyor ve bu bilgi kargo.md #2 kaynağında geçiyor. 250 TL sınırının ifadesindeki küçük fark ana bilgiyi değiştirmiyor."
+      },
+      "answer_cost": 0.0,
+      "judge_cost": 0.0005142,
+      "latency_s": 0.7
+    },
+    {
+      "question_id": "kesin-ucretsiz-esik",
+      "category": "kesin",
+      "question": "Kaç liralık siparişte kargo bedava olur?",
+      "answer": "250 TL'den vyšší bir siparişde kargo bedava olur.",
+      "keyword_score": 1.0,
+      "refused": false,
+      "verdict": {
+        "correct": true,
+        "faithful": false,
+        "reason": "Cevap ana bilgiyi doğru veriyor (250 TL ve üzeri), ancak 'vyšší' gibi Türkçe olmayan yabancı bir kelime içeriyor ve 'siparişde' yazımı hatalı; bu yazım hataları kaynakta bulunmayan bir ifade biçimi olduğundan sadakat açısından kaynağa birebir uymuyor."
+      },
+      "answer_cost": 0.0,
+      "judge_cost": 0.00019830000000000002,
+      "latency_s": 0.267
+    },
+    {
+      "question_id": "kesin-puan-deger",
+      "category": "kesin",
+      "question": "1 Kuzey Puan kaç TL eder?",
+      "answer": "1 Kuzey Puan 1 TL eder. [iade.md #0]",
+      "keyword_score": 1.0,
+      "refused": false,
+      "verdict": {
+        "correct": true,
+        "faithful": true,
+        "reason": "Cevap, 1 Kuzey Puanın 1 TL olduğu beklenen bilgisiyle uyumlu ve bu bilgi kaynaklarda açıkça geçiyor; kaynak etiketi iade.md olsa da içerik doğru."
+      },
+      "answer_cost": 0.0,
+      "judge_cost": 0.00017210000000000004,
+      "latency_s": 0.407
+    },
+    {
+      "question_id": "coklu-iade-kargo",
+      "category": "coklu",
+      "question": "İade gönderirken kargo ücreti öder miyim, normal siparişte kargo ne kadar?",
+      "answer": "İade gönderisi için kargo ücreti free'dir, normal siparişte kargo ücreti 39,90 TL'dir.",
+      "keyword_score": 0.5,
+      "refused": false,
+      "verdict": {
+        "correct": false,
+        "faithful": false,
+        "reason": "Cevap iade gönderisinin ücretsiz olduğunu belirten beklenen bilgiyle uyumlu değil, ayrıca 'free' kelimesi Türkçe değil ve kaynaklarda geçmiyor; 39,90 TL bilgisi ise kaynaklarla uyumlu."
+      },
+      "answer_cost": 0.0,
+      "judge_cost": 0.00018710000000000002,
+      "latency_s": 0.46
+    },
+    {
+      "question_id": "coklu-puan-omur",
+      "category": "coklu",
+      "question": "Puanlarım hesabıma ne zaman geçer ve ne zamana kadar kullanabilirim?",
+      "answer": "Puanlar sipariş teslim edildikten 14 gün sonra hesabınıza tanımlanır. Bu bekleme süresi iade hakkıyla ilgilidir.",
+      "keyword_score": 0.5,
+      "refused": false,
+      "verdict": {
+        "correct": false,
+        "faithful": true,
+        "reason": "Cevap tanımlanma süresini doğru veriyor ancak puanların 1 yıl sonra silindiği bilgisini eksik bırakarak soruyu tam yanıtlamıyor; ek bilgi yok, kaynaklarla uyumlu."
+      },
+      "answer_cost": 0.0,
+      "judge_cost": 0.0001817,
+      "latency_s": 0.516
+    },
+    {
+      "question_id": "yok-hediye",
+      "category": "yok",
+      "question": "Kitapları hediye paketi yapıyor musunuz?",
+      "answer": "Hayır, kitabları hediye paketi olarak iade edemezsiniz. [iade.md #1]",
+      "keyword_score": 1.0,
+      "refused": false,
+      "verdict": {
+        "correct": false,
+        "faithful": false,
+        "reason": "Beklenen bilgi belgelerde cevap olmadığını söylemekti; cevap ise hediye paketi sorusunu iade bilgisiyle karıştırarak alakasız ve kaynakta olmayan bir yanıt veriyor."
+      },
+      "answer_cost": 0.0,
+      "judge_cost": 0.000167,
+      "latency_s": 0.369
+    },
+    {
+      "question_id": "yok-magaza",
+      "category": "yok",
+      "question": "Mağazanız hangi şehirlerde var?",
+      "answer": "Bununla ilgili bilgi yetmedi.",
+      "keyword_score": 1.0,
+      "refused": false,
+      "verdict": {
+        "correct": true,
+        "faithful": true,
+        "reason": "Beklenen bilgi cevabın belgelerde olmadığı yönündeydi ve asistan bilgi bulunmadığını belirtmiş, kaynaklardan uydurma bilgi eklememiştir."
+      },
+      "answer_cost": 0.0,
+      "judge_cost": 0.0001595,
+      "latency_s": 0.203
+    },
+    {
+      "question_id": "yok-kapida-odeme",
+      "category": "yok",
+      "question": "Kapıda ödeme seçeneği var mı?",
+      "answer": "Evet, kapıda ödeme seçeneği mevcuttur.",
+      "keyword_score": 1.0,
+      "refused": false,
+      "verdict": {
+        "correct": false,
+        "faithful": false,
+        "reason": "Beklenen bilgi, belgelerde kapıda ödeme cevabının bulunmadığını; asistan ise kaynaklarda olmayan bir bilgiyle kapıda ödeme olduğunu iddia ettiği için hem doğru değil hem de kaynaklara dayanmıyor."
+      },
+      "answer_cost": 0.0,
+      "judge_cost": 0.0001785,
+      "latency_s": 0.47100000000000003
+    }
+  ]
+}

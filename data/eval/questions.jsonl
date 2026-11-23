@@ -1,0 +1,20 @@
+{"id": "iade-sure", "question": "Bir kitabı kaç gün içinde iade edebilirim?", "category": "olgu", "evidence": ["teslimat tarihinden itibaren 14 gün içinde iade edebilirsiniz"], "answer_keywords": ["14 gün"]}
+{"id": "iade-odeme", "question": "İadem onaylanınca para kartıma ne zaman yatar?", "category": "olgu", "evidence": ["kartınıza 7 iş günü içinde geri yansır"], "answer_keywords": ["7 iş günü"]}
+{"id": "iade-kontrol", "question": "İade ettiğim ürün depoya ulaşınca kaç günde kontrol edilir?", "category": "olgu", "evidence": ["3 iş günü içinde kontrol edilir"], "answer_keywords": ["3 iş günü"]}
+{"id": "kargo-ayni-gun", "question": "Siparişim aynı gün kargoya verilir mi?", "category": "olgu", "evidence": ["Saat 14.00'e kadar verilen siparişler aynı gün kargoya teslim edilir"], "answer_keywords": ["14.00|14:00"]}
+{"id": "kargo-yurtdisi", "question": "Yurt dışına gönderim yapıyor musunuz?", "category": "olgu", "evidence": ["Yurt dışına gönderim şu anda yapılmamaktadır"], "answer_keywords": ["yapılmamaktadır|yapılmıyor|yapmıyoruz|gönderim yok"]}
+{"id": "uyelik-oran", "question": "Her alışverişte ne kadar puan kazanırım?", "category": "olgu", "evidence": ["sipariş tutarının yüzde 5'i kadar Kuzey Puan kazanır"], "answer_keywords": ["yüzde 5|%5"]}
+{"id": "uyelik-silinme", "question": "Kullanmadığım puanlar ne zaman silinir?", "category": "olgu", "evidence": ["kazanıldıkları tarihten itibaren 1 yıl sonra silinir"], "answer_keywords": ["1 yıl|bir yıl"]}
+{"id": "uyelik-sifre", "question": "Şifremi unuttum, ne yapmalıyım?", "category": "olgu", "evidence": ["Şifremi Unuttum bağlantısına tıklayın"], "answer_keywords": ["Şifremi Unuttum"]}
+{"id": "anlam-geri-gonder", "question": "Kitabı geri göndermek için kaç günüm var?", "category": "anlam", "evidence": ["14 gün içinde iade edebilirsiniz"], "answer_keywords": ["14 gün"]}
+{"id": "anlam-ekitap", "question": "Okuduğum e-kitabı geri verebilir miyim?", "category": "anlam", "evidence": ["E-kitaplar ve dijital ürünler indirildikten sonra iade edilemez"], "answer_keywords": ["iade edilemez|edilemez"]}
+{"id": "anlam-evde-yok", "question": "Kargo geldiğinde evde olmazsam paketim ne olur?", "category": "anlam", "evidence": ["paket 3 gün boyunca şubede bekletilir"], "answer_keywords": ["3 gün"]}
+{"id": "anlam-yanlis-urun", "question": "Bana yanlış kitap gönderildi, iade için süre sınırı var mı?", "category": "anlam", "evidence": ["Hasarlı ya da yanlış gelen ürünlerde süre sınırı yoktur"], "answer_keywords": ["süre sınırı yok|sınır yok"]}
+{"id": "kesin-kargo-ucret", "question": "Kargo ücreti kaç TL?", "category": "kesin", "evidence": ["kargo ücreti 39,90 TL'dir"], "answer_keywords": ["39,90|39.90"]}
+{"id": "kesin-ucretsiz-esik", "question": "Kaç liralık siparişte kargo bedava olur?", "category": "kesin", "evidence": ["250 TL ve üzeri siparişlerde kargo ücretsizdir"], "answer_keywords": ["250"]}
+{"id": "kesin-puan-deger", "question": "1 Kuzey Puan kaç TL eder?", "category": "kesin", "evidence": ["1 Kuzey Puan 1 TL değerindedir"], "answer_keywords": ["1 TL"]}
+{"id": "coklu-iade-kargo", "question": "İade gönderirken kargo ücreti öder miyim, normal siparişte kargo ne kadar?", "category": "coklu", "evidence": ["ücretsiz teslim edebilirsiniz", "kargo ücreti 39,90 TL'dir"], "answer_keywords": ["ücretsiz", "39,90|39.90"]}
+{"id": "coklu-puan-omur", "question": "Puanlarım hesabıma ne zaman geçer ve ne zamana kadar kullanabilirim?", "category": "coklu", "evidence": ["teslim edildikten 14 gün sonra hesabınıza tanımlanır", "1 yıl sonra silinir"], "answer_keywords": ["14 gün", "1 yıl|bir yıl"]}
+{"id": "yok-hediye", "question": "Kitapları hediye paketi yapıyor musunuz?", "category": "yok", "evidence": [], "answer_keywords": []}
+{"id": "yok-magaza", "question": "Mağazanız hangi şehirlerde var?", "category": "yok", "evidence": [], "answer_keywords": []}
+{"id": "yok-kapida-odeme", "question": "Kapıda ödeme seçeneği var mı?", "category": "yok", "evidence": [], "answer_keywords": []}
