@@ -79,9 +79,20 @@ def pareto_front(points: list[tuple[float, float]]) -> list[bool]:
     ]
 
 
+def answer_cost_per_question(run: RunRecord) -> float:
+    """Kullanıcıya hizmet verirken ödenecek maliyet: arama + cevap, soru başına.
+
+    Yargıç maliyeti buna dahil değil: yargıç sadece ölçüm yaparken çalışır.
+    """
+    return sum(r.answer_cost for r in run.results) / len(run.results)
+
+
 def runs_table(runs: list[RunRecord]) -> list[dict[str, Any]]:
-    """Her çalıştırma için bir satır: ayarlar + özet ölçütler + Pareto bilgisi."""
-    points = [(quality(r.summary), r.summary["maliyet"]) for r in runs]
+    """Her çalıştırma için bir satır: ayarlar + özet ölçütler + Pareto bilgisi.
+
+    Pareto sınırı (kalite, soru başı cevap maliyeti) ile çizilir; yargıç maliyeti ayrı sütunda.
+    """
+    points = [(quality(r.summary), answer_cost_per_question(r)) for r in runs]
     front = pareto_front(points)
     return [
         {
@@ -90,7 +101,8 @@ def runs_table(runs: list[RunRecord]) -> list[dict[str, Any]]:
             "kalite": q,
             "ifade_başarısı": r.summary["ifade_başarısı"],
             "yargıç_sadık": r.summary["yargıç_sadık"],
-            "maliyet": c,
+            "soru_başı_cevap_maliyeti": c,
+            "yargıç_maliyeti": sum(x.judge_cost for x in r.results),
             "ort_süre": r.summary["ort_süre"],
             "pareto": on_front,
         }

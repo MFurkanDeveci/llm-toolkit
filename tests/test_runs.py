@@ -55,7 +55,18 @@ def test_runs_table_uses_judge_score_as_quality(tmp_path):
     [row] = runs_table(load_runs(tmp_path))
     assert row["kalite"] == 0.5  # Yargıç varsa kalite = yargıcın "doğru" oranı
     assert row["cevap_modeli"] == "claude-haiku-5-5"
-    assert row["maliyet"] == 0.02
+    assert row["soru_başı_cevap_maliyeti"] == 0.01  # (0.01 + 0.01) / 2 soru
+
+
+def test_pareto_ignores_judge_cost(tmp_path):
+    # Aynı cevaplar, biri pahalı yargıçla ölçülmüş: yargıç maliyeti Pareto'yu etkilememeli
+    cheap = [result("a", True, cost=0.001)]
+    judged = [r.model_copy(update={"judge_cost": 0.5}) for r in cheap]
+    save_run(judged, SETUP, tmp_path, now=datetime(2026, 11, 23))
+    save_run([result("a", True, cost=0.002)], SETUP, tmp_path, now=datetime(2026, 11, 24))
+    rows = runs_table(load_runs(tmp_path))
+    assert [r["pareto"] for r in rows] == [True, False]
+    assert rows[0]["yargıç_maliyeti"] == 0.5
 
 
 def test_pareto_front():
