@@ -16,18 +16,19 @@ if not runs:
 
 table = pd.DataFrame(runs_table(runs))
 best = table.loc[table["kalite"].idxmax()]
-cheapest = table.loc[table["maliyet"].idxmin()]
+cheapest = table.loc[table["soru_başı_cevap_maliyeti"].idxmin()]
 col_count, col_best, col_cheap = st.columns(3)
 col_count.metric("Kayıtlı çalıştırma", len(runs))
 col_best.metric("En yüksek kalite", f"%{100 * best['kalite']:.0f}")
 col_best.caption(f"{best['çalıştırma']} · {best.get('cevap_modeli', '?')}")
-col_cheap.metric("En ucuz", f"${cheapest['maliyet']:.4f}")
+col_cheap.metric("En ucuz (soru başı)", f"${cheapest['soru_başı_cevap_maliyeti']:.5f}")
 col_cheap.caption(f"{cheapest['çalıştırma']} · {cheapest.get('cevap_modeli', '?')}")
 
 st.subheader("Tüm çalıştırmalar")
 st.caption(
     "Kalite: yargıç varsa onun 'doğru' oranı, yoksa ifade kontrolü. "
-    "⭐ = Pareto sınırında: daha ucuz ve aynı ya da daha kaliteli başka bir çalıştırma yok."
+    "⭐ = Pareto sınırında: soru başına daha ucuz ve aynı ya da daha kaliteli başka bir "
+    "çalıştırma yok. Yargıç maliyeti ölçümün maliyetidir; kullanıcıya hizmet verirken ödenmez."
 )
 table["pareto"] = table["pareto"].map({True: "⭐", False: ""})
 st.dataframe(
@@ -37,7 +38,10 @@ st.dataframe(
         "kalite": st.column_config.NumberColumn(format="percent"),
         "ifade_başarısı": st.column_config.NumberColumn("ifade", format="percent"),
         "yargıç_sadık": st.column_config.NumberColumn("sadık", format="percent"),
-        "maliyet": st.column_config.NumberColumn(format="$%.6f"),
+        "soru_başı_cevap_maliyeti": st.column_config.NumberColumn(
+            "soru başı cevap", format="$%.5f"
+        ),
+        "yargıç_maliyeti": st.column_config.NumberColumn("yargıç (ölçüm)", format="$%.4f"),
         "ort_süre": st.column_config.NumberColumn("ort. süre (sn)", format="%.2f"),
     },
 )
@@ -48,7 +52,11 @@ points = (
     alt.Chart(chart)
     .mark_circle(size=220, opacity=0.85)
     .encode(
-        x=alt.X("maliyet:Q", title="Toplam maliyet ($)", scale=alt.Scale(padding=20)),
+        x=alt.X(
+            "soru_başı_cevap_maliyeti:Q",
+            title="Soru başına cevap maliyeti ($)",
+            scale=alt.Scale(padding=20),
+        ),
         y=alt.Y("kalite:Q", title="Kalite", scale=alt.Scale(domain=[0, 1.05])),
         color=alt.Color("grup:N", title=None),
         tooltip=["çalıştırma", "cevap_modeli", "k", alt.Tooltip("kalite:Q", format=".0%")],
