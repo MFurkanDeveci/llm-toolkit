@@ -13,5 +13,8 @@ pages = {
         st.Page("pages/3_Cevap.py", title="Cevap", icon="💬"),
         st.Page("pages/4_Hibrit.py", title="Hibrit Arama", icon="⚖️"),
     ],
+    "Modül 4 · Değerlendirme": [
+        st.Page("pages/5_Degerlendirme.py", title="Değerlendirme", icon="📏"),
+    ],
 }
 st.navigation(pages).run()
