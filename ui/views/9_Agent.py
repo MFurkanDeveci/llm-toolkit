@@ -4,7 +4,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from llm_toolkit.agent import AGENT_SYSTEM, run_agent
+from llm_toolkit.agent import AGENT_SYSTEM, REASONS, Limits, run_agent
 from llm_toolkit.config import Settings
 from llm_toolkit.embeddings import OllamaEmbedder
 from llm_toolkit.errors import LLMError
@@ -37,7 +37,15 @@ with st.sidebar:
     else:
         model = st.text_input("Model", value=Settings().ollama_model)
     k = st.slider("Her aramada kaç parça (k)", 1, 6, 3)
-    max_steps = st.slider("En fazla model çağrısı (adım)", 2, 10, 5)
+    st.header("Korumalar")
+    limits = Limits(
+        max_steps=st.slider("En fazla araçlı model çağrısı (adım)", 1, 10, 5),
+        max_cost_usd=st.number_input(
+            "Bütçe ($)", min_value=0.0, value=0.05, step=0.01, format="%.4f"
+        ),
+        max_seconds=st.slider("Süre sınırı (sn)", 5, 120, 60),
+    )
+    st.caption("Sınıra takılan agent yeni arama yapmaz; bir son çağrıyla eldekilerle cevap verir.")
 
 if not (INDEX_DIR / "chunks.json").exists():
     st.info("Önce Arama sayfasında 'İndeksi oluştur'a bas.")
@@ -58,10 +66,9 @@ if submitted and question.strip():
         with st.spinner("Agent çalışıyor..."):
             client = get_client(provider, model)
             st.session_state.agent_run = run_agent(
-                question, store, embedder, client, k=k, max_steps=max_steps
+                question, store, embedder, client, k=k, limits=limits
             )
     except LLMError as exc:
-        # ToolLoopError da bir LLMError: agent adım sınırına takıldıysa burada görünür
         st.error(f"{type(exc).__name__}: {exc}")
         st.stop()
 
@@ -70,6 +77,11 @@ if "agent_run" not in st.session_state:
 
 run = st.session_state.agent_run
 st.subheader("Cevap")
+if run.stop_reason != "cevap":
+    st.warning(
+        f"Agent {REASONS[run.stop_reason]} takıldı. Cevap, o ana kadar bulduklarıyla "
+        "verildi; eksik olabilir."
+    )
 st.markdown(run.answer)
 if run.unknown_citations:
     st.warning(f"Model, hiçbir aramada bulunmayan kaynak gösterdi: {run.unknown_citations}")
@@ -96,7 +108,8 @@ for i, step in enumerate(run.searches, start=1):
             with st.expander(label):
                 st.text(hit.chunk.text)
 with st.container(border=True):
-    st.markdown("**✍️ Cevap yazıldı**")
+    ending = "model kendisi bitirdi" if run.stop_reason == "cevap" else "sınır nedeniyle kapanış"
+    st.markdown(f"**✍️ Cevap yazıldı** ({ending})")
     st.caption("✅ = bu parça cevapta kaynak olarak gösterildi")
 
 with st.expander("Modelle yapılan konuşmanın tamamı"):

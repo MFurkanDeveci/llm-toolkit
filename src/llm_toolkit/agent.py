@@ -4,15 +4,20 @@ Sabit RAG (rag.py): her soruda tam olarak 1 arama, ardından cevap. Akışı biz
 Agent: model soruyu okur, gerekirse arar, sonucu okur, eksik kalırsa başka bir sorguyla
 tekrar arar, yeterli bilgi toplayınca cevaplar. Akışı model belirler.
 
-Döngünün kendisi Modül 2'deki run_with_tools; burada arama aracını ve kayıt tutmayı ekliyoruz.
+Korumalar (Ders 5.2): adım, bütçe ve süre sınırı. Sınıra takılan agent hata vermez; son bir
+çağrıyla o ana kadar bulduklarıyla en iyi cevabı vermesi istenir ve neden durduğu kaydedilir.
 """
+
+import time
+from collections.abc import Callable
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from llm_toolkit.datatypes import LLMResponse, Message, Tool
 from llm_toolkit.providers.base import LLMClient
 from llm_toolkit.rag import extract_citations
-from llm_toolkit.tools import run_with_tools
+from llm_toolkit.tools import execute_tool
 from llm_toolkit.vector_store import Embedder, SearchHit, VectorStore
 
 AGENT_SYSTEM = """Sen bir müşteri destek asistanısın. Soruları sadece belgelerde_ara aracıyla \
@@ -23,6 +28,26 @@ Kurallar:
 - Her bilginin hemen ardından kaynağını köşeli parantezle yaz, örnek: [iade.md #0]
 - Sadece arama sonuçlarında gördüğün kaynak kimliklerini kullan; kimlik uydurma.
 - Aramalarda cevap yoksa "Bu konuda elimdeki belgelerde bilgi yok." de; tahmin etme."""
+
+
+StopReason = Literal["cevap", "adım", "bütçe", "süre"]
+
+REASONS = {
+    "adım": "adım sınırına",
+    "bütçe": "bütçe sınırına",
+    "süre": "süre sınırına",
+}
+WRAP_UP = """Agent {reason} ulaştı; artık arama yapamazsın. Şimdiye kadar bulduğun bilgilerle \
+soruyu cevapla. Cevaplayamadığın kısım varsa bunu açıkça söyle; tahmin etme."""
+FALLBACK_ANSWER = "Sınıra ulaşıldı ve eldeki bilgilerle bir cevap üretilemedi."
+
+
+class Limits(BaseModel):
+    """Agent'ın harcayabileceği kaynaklar. Her araçlı model çağrısından önce kontrol edilir."""
+
+    max_steps: int = 5  # Araç kullanabilen en fazla model çağrısı
+    max_cost_usd: float = 0.05  # Bu tutara ulaşınca yeni arama yapılmaz
+    max_seconds: float = 60.0  # Bu süre dolunca yeni arama yapılmaz
 
 
 class SearchArgs(BaseModel):
@@ -48,6 +73,7 @@ class AgentRun(BaseModel):
     responses: list[LLMResponse]  # Her model çağrısı (maliyet ve süre için)
     messages: list[Message]  # Modelle yapılan konuşmanın tamamı (inceleme için)
     citations: list[tuple[str, int]]
+    stop_reason: StopReason  # "cevap" = model kendisi bitirdi; diğerleri = sınıra takıldı
 
     @property
     def model_calls(self) -> int:
@@ -93,6 +119,19 @@ def make_search_tool(store: VectorStore, embedder: Embedder, k: int, log: list[S
     )
 
 
+def check_limits(
+    responses: list[LLMResponse], elapsed_s: float, limits: Limits
+) -> StopReason | None:
+    """Sınırlardan biri aşıldıysa sebebini, aşılmadıysa None döndürür."""
+    if len(responses) >= limits.max_steps:
+        return "adım"
+    if sum(r.cost_usd for r in responses) >= limits.max_cost_usd:
+        return "bütçe"
+    if elapsed_s >= limits.max_seconds:
+        return "süre"
+    return None
+
+
 def run_agent(
     question: str,
     store: VectorStore,
@@ -100,19 +139,59 @@ def run_agent(
     client: LLMClient,
     *,
     k: int = 3,
-    max_steps: int = 5,
+    limits: Limits | None = None,
+    clock: Callable[[], float] = time.monotonic,
 ) -> AgentRun:
-    """Soruyu agent'a sorar. max_steps aşılırsa ToolLoopError fırlatır (run_with_tools'tan)."""
+    """Soruyu agent'a sorar. Sınıra takılırsa hata vermez, eldekilerle cevap ister.
+
+    En fazla limits.max_steps araçlı çağrı + 1 kapanış çağrısı yapılır. Bütçe ve süre "yumuşak"
+    sınırdır: aşıldıkları an yeni arama başlamaz, ama kapanış çağrısı biraz daha harcar.
+    """
+    limits = limits or Limits()
     searches: list[SearchStep] = []
     tool = make_search_tool(store, embedder, k, searches)
-    answer, responses, messages = run_with_tools(
-        client, question, [tool], system=AGENT_SYSTEM, max_steps=max_steps
-    )
-    return AgentRun(
-        question=question,
-        answer=answer,
-        searches=searches,
-        responses=responses,
-        messages=messages,
-        citations=extract_citations(answer),
-    )
+    messages = [Message(role="user", content=question)]
+    responses: list[LLMResponse] = []
+    start = clock()
+
+    def finish(answer: str, stop_reason: StopReason) -> AgentRun:
+        return AgentRun(
+            question=question,
+            answer=answer,
+            searches=searches,
+            responses=responses,
+            messages=messages,
+            citations=extract_citations(answer),
+            stop_reason=stop_reason,
+        )
+
+    def ask_model() -> LLMResponse:
+        response = client.complete(messages, system=AGENT_SYSTEM, tools=[tool])
+        responses.append(response)
+        messages.append(
+            Message(
+                role="assistant",
+                content=response.text,
+                tool_calls=response.tool_calls,
+                provider_blocks=response.provider_blocks,
+            )
+        )
+        return response
+
+    while (stop := check_limits(responses, clock() - start, limits)) is None:
+        response = ask_model()
+        if not response.tool_calls:  # Model aramayı bıraktı: cevap hazır
+            return finish(response.text, "cevap")
+        for call in response.tool_calls:
+            result = execute_tool({tool.name: tool}, call)
+            messages.append(
+                Message(role="tool", content=result, tool_call_id=call.id, tool_name=call.name)
+            )
+
+    # Sınıra takıldı: son bir çağrıyla, yeni arama yapmadan cevap vermesini iste.
+    # Araç tanımı yine gönderilir (geçmişte araç çağrıları var), ama talimat aramayı yasaklar.
+    messages.append(Message(role="user", content=WRAP_UP.format(reason=REASONS[stop])))
+    response = ask_model()
+    if response.tool_calls:  # Talimata rağmen arama istedi: aramayı çalıştırmıyoruz
+        return finish(FALLBACK_ANSWER, stop)
+    return finish(response.text, stop)
