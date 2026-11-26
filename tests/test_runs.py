@@ -82,3 +82,17 @@ def test_compare_runs_marks_changed_questions(tmp_path):
     rows = {r["soru"]: r for r in compare_runs(old, new)}
     assert rows["a"]["değişim"] == ""
     assert rows["b"]["değişim"] == "düzeldi"
+
+
+# --- Sabit RAG ve agent yan yana (Ders 5.4b) ---
+
+
+def test_old_runs_count_as_fixed_rag_and_agent_runs_keep_their_method(tmp_path):
+    old = [result("a", True), result("b", True)]  # Eski kayıt: setup'ta "yöntem" yok
+    agent = [r.model_copy(update={"searches": n}) for r, n in zip(old, [1, 2], strict=True)]
+    save_run(old, SETUP, tmp_path, now=datetime(2026, 11, 23))
+    save_run(agent, {"yöntem": "agent", **SETUP}, tmp_path, now=datetime(2026, 11, 24))
+    rows = runs_table(load_runs(tmp_path))
+    assert [r["yöntem"] for r in rows] == ["sabit RAG", "agent"]
+    assert [r["ort_arama"] for r in rows] == [1.0, 1.5]
+    assert list(rows[0])[:2] == ["çalıştırma", "yöntem"]  # Tabloda hep ikinci sütun
