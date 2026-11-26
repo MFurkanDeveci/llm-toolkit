@@ -4,9 +4,9 @@ import numpy as np
 import pytest
 from conftest import FakeLLM, make_response
 
-from llm_toolkit.agent import FALLBACK_ANSWER, Limits, run_agent
+from llm_toolkit.agent import FALLBACK_ANSWER, Limits, build_history, run_agent
 from llm_toolkit.chunking import Chunk
-from llm_toolkit.datatypes import ToolCall
+from llm_toolkit.datatypes import Message, ToolCall
 from llm_toolkit.embeddings import EmbeddingResult
 from llm_toolkit.vector_store import VectorStore
 
@@ -114,3 +114,49 @@ def test_wrap_up_that_still_wants_tools_gets_fallback_answer():
     run = run_agent("?", STORE, KeywordEmbedder(), llm, limits=Limits(max_steps=1))
     assert run.answer == FALLBACK_ANSWER
     assert len(run.searches) == 1  # Kapanış çağrısındaki arama isteği çalıştırılmadı
+
+
+# --- Konuşma hafızası (Ders 5.3) ---
+
+
+def test_history_is_sent_before_new_question_and_not_modified():
+    history = [
+        Message(role="user", content="İade süresi ne kadar?"),
+        Message(role="assistant", content="14 gün [d0.md #0]."),
+    ]
+    llm = FakeLLM([make_response("E-kitaplar için de aynı.")])
+    run_agent("Peki e-kitaplar?", STORE, KeywordEmbedder(), llm, history=history)
+    sent = llm.calls[0]
+    assert [m.content for m in sent] == [
+        "İade süresi ne kadar?",
+        "14 gün [d0.md #0].",
+        "Peki e-kitaplar?",
+    ]
+    assert len(history) == 2  # Çağıranın listesine dokunulmamalı
+
+
+def test_citation_from_previous_answer_is_not_flagged():
+    history = [
+        Message(role="user", content="İade?"),
+        Message(role="assistant", content="14 gün [d0.md #0]."),
+    ]
+    # Model yeni arama yapmadan önceki cevaptaki kaynağı tekrar kullanıyor: meşru
+    llm = FakeLLM([make_response("Dediğim gibi 14 gün [d0.md #0]; kargo [d1.md #0].")])
+    run = run_agent("Tekrar söyler misin?", STORE, KeywordEmbedder(), llm, history=history)
+    assert run.unknown_citations == [("d1.md", 0)]  # Ne aramada ne geçmişte var
+
+
+def build_run(question: str, answer: str):
+    return run_agent(question, STORE, KeywordEmbedder(), FakeLLM([make_response(answer)]))
+
+
+def test_build_history_keeps_only_last_turns_as_question_answer_pairs():
+    runs = [build_run(f"soru {i}", f"cevap {i}") for i in range(4)]
+    history = build_history(runs, max_turns=2)
+    assert [(m.role, m.content) for m in history] == [
+        ("user", "soru 2"),
+        ("assistant", "cevap 2"),
+        ("user", "soru 3"),
+        ("assistant", "cevap 3"),
+    ]
+    assert build_history(runs, max_turns=0) == []  # Hafıza kapalı

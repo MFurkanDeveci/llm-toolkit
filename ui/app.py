@@ -22,6 +22,7 @@ pages = {
     ],
     "Modül 5 · Agent": [
         st.Page("views/9_Agent.py", title="Agent", icon="🤖"),
+        st.Page("views/10_Sohbet.py", title="Sohbet", icon="🗨️"),
     ],
 }
 st.navigation(pages).run()

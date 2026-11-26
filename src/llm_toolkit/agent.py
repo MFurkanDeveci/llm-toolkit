@@ -6,6 +6,9 @@ tekrar arar, yeterli bilgi toplayınca cevaplar. Akışı model belirler.
 
 Korumalar (Ders 5.2): adım, bütçe ve süre sınırı. Sınıra takılan agent hata vermez; son bir
 çağrıyla o ana kadar bulduklarıyla en iyi cevabı vermesi istenir ve neden durduğu kaydedilir.
+
+Hafıza (Ders 5.3): önceki turların sadece soru ve cevapları modele verilir (aramalar değil).
+Böylece "peki e-kitaplar için?" gibi devam soruları anlaşılır, token maliyeti de sınırlı kalır.
 """
 
 import time
@@ -74,6 +77,7 @@ class AgentRun(BaseModel):
     messages: list[Message]  # Modelle yapılan konuşmanın tamamı (inceleme için)
     citations: list[tuple[str, int]]
     stop_reason: StopReason  # "cevap" = model kendisi bitirdi; diğerleri = sınıra takıldı
+    history_citations: list[tuple[str, int]] = []  # Önceki cevaplarda geçen kaynaklar
 
     @property
     def model_calls(self) -> int:
@@ -89,8 +93,10 @@ class AgentRun(BaseModel):
 
     @property
     def unknown_citations(self) -> list[tuple[str, int]]:
-        """Cevapta geçen ama hiçbir aramada bulunmamış kaynaklar: model bunları uydurmuş."""
+        """Cevapta geçen ama ne bu turun aramalarında ne de önceki cevaplarda bulunan kaynaklar:
+        model bunları uydurmuş demektir."""
         seen = {(h.chunk.source, h.chunk.index) for s in self.searches for h in s.hits}
+        seen |= set(self.history_citations)
         return [c for c in self.citations if c not in seen]
 
 
@@ -119,6 +125,20 @@ def make_search_tool(store: VectorStore, embedder: Embedder, k: int, log: list[S
     )
 
 
+def build_history(runs: list[AgentRun], max_turns: int) -> list[Message]:
+    """Önceki turlardan hafıza üretir: son max_turns turun soru ve cevabı (kayan pencere).
+
+    Aramalar ve araç sonuçları hafızaya alınmaz: cevaplar zaten bulunan bilgiyi kaynak
+    etiketleriyle taşır. Tüm konuşmayı göndermek her turda token maliyetini katlar.
+    """
+    recent = runs[-max_turns:] if max_turns > 0 else []
+    history: list[Message] = []
+    for run in recent:
+        history.append(Message(role="user", content=run.question))
+        history.append(Message(role="assistant", content=run.answer))
+    return history
+
+
 def check_limits(
     responses: list[LLMResponse], elapsed_s: float, limits: Limits
 ) -> StopReason | None:
@@ -140,17 +160,21 @@ def run_agent(
     *,
     k: int = 3,
     limits: Limits | None = None,
+    history: list[Message] | None = None,
     clock: Callable[[], float] = time.monotonic,
 ) -> AgentRun:
     """Soruyu agent'a sorar. Sınıra takılırsa hata vermez, eldekilerle cevap ister.
 
     En fazla limits.max_steps araçlı çağrı + 1 kapanış çağrısı yapılır. Bütçe ve süre "yumuşak"
     sınırdır: aşıldıkları an yeni arama başlamaz, ama kapanış çağrısı biraz daha harcar.
+    history: önceki turlar (build_history ile); yeni sorudan önce modele gönderilir.
     """
     limits = limits or Limits()
     searches: list[SearchStep] = []
     tool = make_search_tool(store, embedder, k, searches)
-    messages = [Message(role="user", content=question)]
+    history = history or []
+    # Yeni liste: çağıranın history listesi değişmesin
+    messages = [*history, Message(role="user", content=question)]
     responses: list[LLMResponse] = []
     start = clock()
 
@@ -163,6 +187,9 @@ def run_agent(
             messages=messages,
             citations=extract_citations(answer),
             stop_reason=stop_reason,
+            history_citations=[
+                c for m in history if m.role == "assistant" for c in extract_citations(m.content)
+            ],
         )
 
     def ask_model() -> LLMResponse:
