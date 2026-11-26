@@ -19,5 +19,8 @@ pages = {
         st.Page("pages/7_Rerank.py", title="Reranking", icon="🔢"),
         st.Page("pages/8_Karsilastirma.py", title="Karşılaştırma", icon="📊"),
     ],
+    "Modül 5 · Agent": [
+        st.Page("pages/9_Agent.py", title="Agent", icon="🤖"),
+    ],
 }
 st.navigation(pages).run()
