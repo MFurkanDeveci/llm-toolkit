@@ -6,17 +6,22 @@
 2. LLM yargıç (ücretli): başka bir model cevabı okuyup karar verir. Cevap doğru mu? Cevaptaki
    her bilgi verilen kaynaklarda geçiyor mu (sadakat)? İfade kontrolünün yakalayamadığı
    durumları (doğru ama farklı kelimeyle yazılmış cevap, uydurulmuş ek bilgi) yakalar.
+
+Aynı ölçüm hem sabit RAG'a (evaluate_answer) hem agent'a (evaluate_agent_answer, Ders 5.4)
+uygulanır: soru, ifade kontrolü ve yargıç aynı; sadece cevabı üreten yöntem değişir.
+Agent'ta yargıç, agent'ın tüm aramalarında bulduğu parçaları kaynak olarak görür.
 """
 
 from collections import defaultdict
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from llm_toolkit.agent import Limits, run_agent
 from llm_toolkit.evalset import EvalQuestion
 from llm_toolkit.providers.base import LLMClient
-from llm_toolkit.rag import RAGAnswer, answer_question
+from llm_toolkit.rag import answer_question
 from llm_toolkit.structured import extract
-from llm_toolkit.vector_store import Embedder, VectorStore
+from llm_toolkit.vector_store import Embedder, SearchHit, VectorStore
 
 REFUSAL = "bilgi yok"  # rag.SYSTEM, cevap yoksa "...belgelerde bilgi yok." demesini istiyor
 
@@ -66,6 +71,10 @@ class AnswerResult(BaseModel):
     answer_cost: float
     judge_cost: float
     latency_s: float  # Arama + cevap süresi (yargıç hariç)
+    # Ders 5.4: varsayılanlar sabit RAG'ın değerleri; eski kayıtlar bu sayede okunmaya devam eder
+    searches: int = 1  # Kaç arama yapıldı
+    model_calls: int = 1  # Kaç cevap modeli çağrısı yapıldı
+    stop_reason: str = "cevap"  # Agent sınıra takıldıysa "adım", "bütçe" ya da "süre"
 
     @property
     def keyword_pass(self) -> bool:
@@ -75,20 +84,57 @@ class AnswerResult(BaseModel):
         return self.keyword_score == 1.0 and not self.refused
 
 
-def build_judge_prompt(question: EvalQuestion, rag: RAGAnswer) -> str:
+def build_judge_prompt(question: EvalQuestion, hits: list[SearchHit], answer: str) -> str:
     if question.answerable:
         expected = "\n".join(f"- {e}" for e in question.evidence)
     else:
         expected = "Belgelerde bu sorunun cevabı yok."
     sources = "\n\n".join(
-        f'<kaynak id="{h.chunk.source} #{h.chunk.index}">\n{h.chunk.text}\n</kaynak>'
-        for h in rag.hits
+        f'<kaynak id="{h.chunk.source} #{h.chunk.index}">\n{h.chunk.text}\n</kaynak>' for h in hits
     )
     return (
         f"<soru>{question.question}</soru>\n\n"
         f"<beklenen_bilgi>\n{expected}\n</beklenen_bilgi>\n\n"
         f"<kaynaklar>\n{sources}\n</kaynaklar>\n\n"
-        f"<cevap>\n{rag.response.text}\n</cevap>"
+        f"<cevap>\n{answer}\n</cevap>"
+    )
+
+
+def score_answer(
+    question: EvalQuestion,
+    answer: str,
+    hits: list[SearchHit],
+    judge: LLMClient | None,
+    *,
+    answer_cost: float,
+    latency_s: float,
+    searches: int = 1,
+    model_calls: int = 1,
+    stop_reason: str = "cevap",
+) -> AnswerResult:
+    """Cevabı kim üretmiş olursa olsun aynı şekilde puanlar: ifade kontrolü + isteğe bağlı yargıç.
+
+    hits: cevabı üreten modelin gördüğü parçalar; yargıç sadakati bunlara göre değerlendirir.
+    """
+    verdict, judge_cost = None, 0.0
+    if judge is not None:
+        prompt = build_judge_prompt(question, hits, answer)
+        verdict, responses = extract(judge, prompt, JudgeVerdict, system=JUDGE_SYSTEM)
+        judge_cost = sum(r.cost_usd for r in responses)
+    return AnswerResult(
+        question_id=question.id,
+        category=question.category,
+        question=question.question,
+        answer=answer,
+        keyword_score=keyword_score(answer, question.answer_keywords),
+        refused=is_refusal(answer),
+        verdict=verdict,
+        answer_cost=answer_cost,
+        judge_cost=judge_cost,
+        latency_s=latency_s,
+        searches=searches,
+        model_calls=model_calls,
+        stop_reason=stop_reason,
     )
 
 
@@ -101,24 +147,45 @@ def evaluate_answer(
     judge: LLMClient | None = None,
     k: int = 3,
 ) -> AnswerResult:
-    """Bir soruyu RAG ile cevaplatır, ifade kontrolünü yapar, istenirse yargıca sorar."""
+    """Bir soruyu sabit RAG ile cevaplatır (1 arama + 1 cevap) ve puanlar."""
     rag = answer_question(question.question, store, embedder, client, k=k)
-    verdict, judge_cost = None, 0.0
-    if judge is not None:
-        prompt = build_judge_prompt(question, rag)
-        verdict, responses = extract(judge, prompt, JudgeVerdict, system=JUDGE_SYSTEM)
-        judge_cost = sum(r.cost_usd for r in responses)
-    return AnswerResult(
-        question_id=question.id,
-        category=question.category,
-        question=question.question,
-        answer=rag.response.text,
-        keyword_score=keyword_score(rag.response.text, question.answer_keywords),
-        refused=is_refusal(rag.response.text),
-        verdict=verdict,
+    return score_answer(
+        question,
+        rag.response.text,
+        rag.hits,
+        judge,
         answer_cost=rag.search.cost_usd + rag.response.cost_usd,
-        judge_cost=judge_cost,
         latency_s=rag.search.latency_s + rag.response.latency_s,
+    )
+
+
+def evaluate_agent_answer(
+    question: EvalQuestion,
+    store: VectorStore,
+    embedder: Embedder,
+    client: LLMClient,
+    *,
+    judge: LLMClient | None = None,
+    k: int = 3,
+    limits: Limits | None = None,
+) -> AnswerResult:
+    """Bir soruyu agent'a cevaplatır ve sabit RAG'la aynı şekilde puanlar."""
+    run = run_agent(question.question, store, embedder, client, k=k, limits=limits)
+    # Yargıç, agent'ın gördüğü tüm parçaları görmeli; aynı parça iki aramada gelmişse bir kez
+    unique: dict[tuple[str, int], SearchHit] = {}
+    for step in run.searches:
+        for hit in step.hits:
+            unique.setdefault((hit.chunk.source, hit.chunk.index), hit)
+    return score_answer(
+        question,
+        run.answer,
+        list(unique.values()),
+        judge,
+        answer_cost=run.cost_usd,
+        latency_s=run.latency_s,
+        searches=len(run.searches),
+        model_calls=run.model_calls,
+        stop_reason=run.stop_reason,
     )
 
 

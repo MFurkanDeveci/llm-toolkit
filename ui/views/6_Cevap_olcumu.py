@@ -1,11 +1,14 @@
-"""Cevap ölçümü sayfası: soru setini RAG ile cevaplat, ifade kontrolü ve LLM yargıçla puanla."""
+"""Cevap ölçümü sayfası: soru setini sabit RAG ya da agent ile cevaplat, ifade kontrolü ve LLM
+yargıçla puanla. Sonuçlar deney kaydına yazılır; Karşılaştırma sayfası onları yan yana gösterir.
+"""
 
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
-from llm_toolkit.answer_eval import evaluate_answer, summarize_answers
+from llm_toolkit.agent import Limits
+from llm_toolkit.answer_eval import evaluate_agent_answer, evaluate_answer, summarize_answers
 from llm_toolkit.config import Settings
 from llm_toolkit.embeddings import OllamaEmbedder
 from llm_toolkit.errors import LLMError
@@ -38,8 +41,11 @@ st.title("🧑‍⚖️ Cevap ölçümü")
 
 with st.sidebar:
     st.header("Cevap modeli")
+    method = st.radio("Yöntem", ["sabit RAG", "agent"], horizontal=True)
     answer_provider, answer_model = pick_model("Sağlayıcı", "answer", "claude-haiku-5-5")
-    k = st.slider("Modele verilecek parça sayısı (k)", 1, 6, 3)
+    k = st.slider("Arama başına parça sayısı (k)", 1, 6, 3)
+    if method == "agent":
+        st.caption("Agent varsayılan korumalarla çalışır: 5 adım, $0.05, 60 sn (soru başına).")
     st.header("Yargıç")
     use_judge = st.toggle("LLM yargıç kullan", value=True)
     if use_judge:
@@ -55,8 +61,9 @@ embedder = OllamaEmbedder(store.model, host=settings.ollama_host, timeout_s=sett
 questions = load_questions()
 
 calls = len(questions) * (2 if use_judge else 1)
+at_least = "en az " if method == "agent" else ""  # Agent soru başına 2+ çağrı yapabilir
 st.caption(
-    f"İndeks: {len(store.chunks)} parça · {len(questions)} soru · {calls} model çağrısı "
+    f"İndeks: {len(store.chunks)} parça · {len(questions)} soru · {at_least}{calls} model çağrısı "
     f"(cevap{' + yargıç' if use_judge else ''})"
 )
 if "anthropic" in (answer_provider, judge_provider if use_judge else ""):
@@ -71,7 +78,12 @@ if st.button("Ölçümü çalıştır", type="primary"):
     try:
         for i, question in enumerate(questions, start=1):
             progress.progress(i / len(questions), text=f"{i}/{len(questions)} · {question.id}")
-            result = evaluate_answer(question, store, embedder, client, judge=judge, k=k)
+            if method == "agent":
+                result = evaluate_agent_answer(
+                    question, store, embedder, client, judge=judge, k=k, limits=Limits()
+                )
+            else:
+                result = evaluate_answer(question, store, embedder, client, judge=judge, k=k)
             results.append(result)
             spent += result.answer_cost + result.judge_cost
             live_cost.metric("Şu ana kadarki maliyet", f"${spent:.6f}")
@@ -82,12 +94,17 @@ if st.button("Ölçümü çalıştır", type="primary"):
     live_cost.empty()
     st.session_state.answer_eval = {
         "results": results,
-        "setup": f"Cevap: {answer_model} · Yargıç: {judge_model if use_judge else 'yok'} · k={k}",
+        "method": method,
+        "setup": (
+            f"Yöntem: {method} · Cevap: {answer_model} · "
+            f"Yargıç: {judge_model if use_judge else 'yok'} · k={k}"
+        ),
     }
     # Deney kaydı: Karşılaştırma sayfası bu dosyaları okur
     path = save_run(
         results,
         {
+            "yöntem": method,
             "cevap_modeli": answer_model,
             "yargıç": judge_model if use_judge else "yok",
             "k": k,
@@ -126,6 +143,22 @@ st.dataframe(
     },
 )
 
+if run.get("method") == "agent":
+    st.subheader("Agent nasıl çalıştı?")
+    searches = pd.Series([r.searches for r in results])
+    col_chart, col_stats = st.columns([2, 1])
+    with col_chart:
+        counts = searches.value_counts().reindex(range(searches.max() + 1), fill_value=0)
+        st.bar_chart(counts, x_label="Arama sayısı", y_label="Soru sayısı", height=220)
+        st.caption("0 = hiç aramadan cevap verdi. Sabit RAG'da her soru tam 1 arama yapar.")
+    with col_stats:
+        st.metric("Ort. arama", f"{searches.mean():.1f}")
+        st.metric("Ort. model çağrısı", f"{sum(r.model_calls for r in results) / len(results):.1f}")
+        limited = [r.question_id for r in results if r.stop_reason != "cevap"]
+        st.metric("Sınıra takılan", len(limited))
+        if limited:
+            st.caption(", ".join(limited))
+
 st.subheader("Soru soru")
 only_problems = st.toggle("Sadece sorunlu soruları göster", value=False)
 rows = []
@@ -140,6 +173,7 @@ for r in results:
         {
             "soru": r.question_id,
             "tür": r.category,
+            "arama": r.searches,
             "ifade": "✅" if r.keyword_pass else "❌",
             "doğru": ("✅" if r.verdict.correct else "❌") if r.verdict else "–",
             "sadık": ("✅" if r.verdict.faithful else "❌") if r.verdict else "–",
