@@ -9,15 +9,19 @@ Korumalar (Ders 5.2): adım, bütçe ve süre sınırı. Sınıra takılan agent
 
 Hafıza (Ders 5.3): önceki turların sadece soru ve cevapları modele verilir (aramalar değil).
 Böylece "peki e-kitaplar için?" gibi devam soruları anlaşılır, token maliyeti de sınırlı kalır.
+
+İnsan onayı (Ders 5.5): arama sadece okur; işlem araçları (actions) ise dünyayı değiştirir
+(örn. iade başlatmak). Model bir işlem aracı isteyince agent durur (stop_reason "onay") ve
+isteği pending'e koyar. İşlem, ancak kullanıcı onaylarsa resume_agent ile çalıştırılır.
 """
 
 import time
 from collections.abc import Callable
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from llm_toolkit.datatypes import LLMResponse, Message, Tool
+from llm_toolkit.datatypes import LLMResponse, Message, Tool, ToolCall
 from llm_toolkit.providers.base import LLMClient
 from llm_toolkit.rag import extract_citations
 from llm_toolkit.tools import execute_tool
@@ -32,8 +36,16 @@ Kurallar:
 - Sadece arama sonuçlarında gördüğün kaynak kimliklerini kullan; kimlik uydurma.
 - Aramalarda cevap yoksa "Bu konuda elimdeki belgelerde bilgi yok." de; tahmin etme."""
 
+# Sadece işlem araçları verildiğinde sisteme eklenir; ölçümlerdeki agent davranışı değişmez.
+ACTION_RULES = """
+İşlem araçları (örn. iade_baslat) gerçek bir işlem yapar ve kullanıcı onaylamadan çalışmaz:
+- İşlem aracını sadece kullanıcı açıkça istediğinde çağır.
+- Gerekli bilgileri (sipariş numarası gibi) kullanıcıdan öğren; asla uydurma. Eksikse sor.
+- Kullanıcı reddederse işlemi tekrar deneme; yapılmadığını söyle."""
+REJECTED = "Kullanıcı bu işlemi reddetti; işlem yapılmadı. Tekrar deneme."
 
-StopReason = Literal["cevap", "adım", "bütçe", "süre"]
+
+StopReason = Literal["cevap", "onay", "adım", "bütçe", "süre"]
 
 REASONS = {
     "adım": "adım sınırına",
@@ -76,8 +88,10 @@ class AgentRun(BaseModel):
     responses: list[LLMResponse]  # Her model çağrısı (maliyet ve süre için)
     messages: list[Message]  # Modelle yapılan konuşmanın tamamı (inceleme için)
     citations: list[tuple[str, int]]
-    stop_reason: StopReason  # "cevap" = model kendisi bitirdi; diğerleri = sınıra takıldı
+    # "cevap" = model kendisi bitirdi; "onay" = işlem için kullanıcıyı bekliyor; diğerleri = sınır
+    stop_reason: StopReason
     history_citations: list[tuple[str, int]] = []  # Önceki cevaplarda geçen kaynaklar
+    pending: list[ToolCall] = []  # Onay bekleyen işlem çağrıları (stop_reason "onay" ise)
 
     @property
     def model_calls(self) -> int:
@@ -152,6 +166,22 @@ def check_limits(
     return None
 
 
+def needs_approval(call: ToolCall, actions: dict[str, Tool]) -> bool:
+    """Bu çağrı insana sorulmalı mı? İşlem aracıysa ve argümanları geçerliyse evet.
+
+    Argümanları geçersiz bir istek insana gösterilmez: execute_tool hatayı modele döndürür,
+    model düzeltir ya da eksik bilgiyi kullanıcıya sorar.
+    """
+    tool = actions.get(call.name)
+    if tool is None:
+        return False
+    try:
+        tool.parameters.model_validate(call.arguments)
+    except ValidationError:
+        return False
+    return True
+
+
 def run_agent(
     question: str,
     store: VectorStore,
@@ -161,6 +191,7 @@ def run_agent(
     k: int = 3,
     limits: Limits | None = None,
     history: list[Message] | None = None,
+    actions: list[Tool] | None = None,
     clock: Callable[[], float] = time.monotonic,
 ) -> AgentRun:
     """Soruyu agent'a sorar. Sınıra takılırsa hata vermez, eldekilerle cevap ister.
@@ -168,17 +199,97 @@ def run_agent(
     En fazla limits.max_steps araçlı çağrı + 1 kapanış çağrısı yapılır. Bütçe ve süre "yumuşak"
     sınırdır: aşıldıkları an yeni arama başlamaz, ama kapanış çağrısı biraz daha harcar.
     history: önceki turlar (build_history ile); yeni sorudan önce modele gönderilir.
+    actions: onay gerektiren işlem araçları. İstenirse agent "onay" ile durur (resume_agent).
     """
-    limits = limits or Limits()
-    searches: list[SearchStep] = []
-    tool = make_search_tool(store, embedder, k, searches)
     history = history or []
-    # Yeni liste: çağıranın history listesi değişmesin
-    messages = [*history, Message(role="user", content=question)]
-    responses: list[LLMResponse] = []
+    return _agent_loop(
+        question,
+        # Yeni liste: çağıranın history listesi değişmesin
+        messages=[*history, Message(role="user", content=question)],
+        responses=[],
+        searches=[],
+        history_citations=[
+            c for m in history if m.role == "assistant" for c in extract_citations(m.content)
+        ],
+        store=store,
+        embedder=embedder,
+        client=client,
+        k=k,
+        limits=limits or Limits(),
+        actions=actions or [],
+        clock=clock,
+    )
+
+
+def resume_agent(
+    run: AgentRun,
+    approved: bool,
+    store: VectorStore,
+    embedder: Embedder,
+    client: LLMClient,
+    *,
+    k: int = 3,
+    limits: Limits | None = None,
+    actions: list[Tool] | None = None,
+    clock: Callable[[], float] = time.monotonic,
+) -> AgentRun:
+    """Onay bekleyen agent'ı kullanıcının kararıyla sürdürür.
+
+    Onaylandıysa bekleyen işlemler çalışır, reddedildiyse çalışmaz ve model bunu öğrenir.
+    Adım ve bütçe sınırı önceki çağrılarla birlikte sayılır; süre yeniden başlar
+    (kullanıcının düşünme süresi agent'ın süresinden sayılmaz).
+    """
+    if run.stop_reason != "onay":
+        raise ValueError("Bu agent onay beklemiyor.")
+    actions = actions or []
+    by_name = {t.name: t for t in actions}
+    messages = list(run.messages)
+    for call in run.pending:
+        result = execute_tool(by_name, call) if approved else REJECTED
+        messages.append(
+            Message(role="tool", content=result, tool_call_id=call.id, tool_name=call.name)
+        )
+    return _agent_loop(
+        run.question,
+        messages=messages,
+        responses=list(run.responses),
+        searches=list(run.searches),
+        history_citations=run.history_citations,
+        store=store,
+        embedder=embedder,
+        client=client,
+        k=k,
+        limits=limits or Limits(),
+        actions=actions,
+        clock=clock,
+    )
+
+
+def _agent_loop(
+    question: str,
+    *,
+    messages: list[Message],
+    responses: list[LLMResponse],
+    searches: list[SearchStep],
+    history_citations: list[tuple[str, int]],
+    store: VectorStore,
+    embedder: Embedder,
+    client: LLMClient,
+    k: int,
+    limits: Limits,
+    actions: list[Tool],
+    clock: Callable[[], float],
+) -> AgentRun:
+    """Agent döngüsü: run_agent (yeni soru) ve resume_agent (onaydan sonra) bunu kullanır."""
+    search_tool = make_search_tool(store, embedder, k, searches)
+    action_tools = {t.name: t for t in actions}
+    tools = {search_tool.name: search_tool, **action_tools}
+    system = AGENT_SYSTEM + ACTION_RULES if actions else AGENT_SYSTEM
     start = clock()
 
-    def finish(answer: str, stop_reason: StopReason) -> AgentRun:
+    def finish(
+        answer: str, stop_reason: StopReason, pending: list[ToolCall] | None = None
+    ) -> AgentRun:
         return AgentRun(
             question=question,
             answer=answer,
@@ -187,13 +298,12 @@ def run_agent(
             messages=messages,
             citations=extract_citations(answer),
             stop_reason=stop_reason,
-            history_citations=[
-                c for m in history if m.role == "assistant" for c in extract_citations(m.content)
-            ],
+            history_citations=history_citations,
+            pending=pending or [],
         )
 
     def ask_model() -> LLMResponse:
-        response = client.complete(messages, system=AGENT_SYSTEM, tools=[tool])
+        response = client.complete(messages, system=system, tools=list(tools.values()))
         responses.append(response)
         messages.append(
             Message(
@@ -209,16 +319,22 @@ def run_agent(
         response = ask_model()
         if not response.tool_calls:  # Model aramayı bıraktı: cevap hazır
             return finish(response.text, "cevap")
+        pending = []
         for call in response.tool_calls:
-            result = execute_tool({tool.name: tool}, call)
+            if needs_approval(call, action_tools):
+                pending.append(call)  # İşlem: çalıştırma, kullanıcıya sor
+                continue
+            result = execute_tool(tools, call)
             messages.append(
                 Message(role="tool", content=result, tool_call_id=call.id, tool_name=call.name)
             )
+        if pending:  # Aynı adımdaki aramalar çalıştı; işlemler onay bekliyor
+            return finish(response.text, "onay", pending)
 
     # Sınıra takıldı: son bir çağrıyla, yeni arama yapmadan cevap vermesini iste.
     # Araç tanımı yine gönderilir (geçmişte araç çağrıları var), ama talimat aramayı yasaklar.
     messages.append(Message(role="user", content=WRAP_UP.format(reason=REASONS[stop])))
     response = ask_model()
-    if response.tool_calls:  # Talimata rağmen arama istedi: aramayı çalıştırmıyoruz
+    if response.tool_calls:  # Talimata rağmen araç istedi: hiçbir aracı çalıştırmıyoruz
         return finish(FALLBACK_ANSWER, stop)
     return finish(response.text, stop)
