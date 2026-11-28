@@ -1,4 +1,7 @@
-"""Karşılaştırma sayfası: kayıtlı cevap ölçümlerini kalite, maliyet ve süreyle karşılaştır."""
+"""Karşılaştırma sayfası: kayıtlı cevap ölçümlerini kalite, maliyet ve süreyle karşılaştır.
+
+Sabit RAG ve agent çalıştırmaları aynı tabloda ve grafikte; grafikte yöntem şekille ayrılır.
+"""
 
 import altair as alt
 import pandas as pd
@@ -20,9 +23,11 @@ cheapest = table.loc[table["soru_başı_cevap_maliyeti"].idxmin()]
 col_count, col_best, col_cheap = st.columns(3)
 col_count.metric("Kayıtlı çalıştırma", len(runs))
 col_best.metric("En yüksek kalite", f"%{100 * best['kalite']:.0f}")
-col_best.caption(f"{best['çalıştırma']} · {best.get('cevap_modeli', '?')}")
+col_best.caption(f"{best['çalıştırma']} · {best['yöntem']} · {best.get('cevap_modeli', '?')}")
 col_cheap.metric("En ucuz (soru başı)", f"${cheapest['soru_başı_cevap_maliyeti']:.5f}")
-col_cheap.caption(f"{cheapest['çalıştırma']} · {cheapest.get('cevap_modeli', '?')}")
+col_cheap.caption(
+    f"{cheapest['çalıştırma']} · {cheapest['yöntem']} · {cheapest.get('cevap_modeli', '?')}"
+)
 
 st.subheader("Tüm çalıştırmalar")
 st.caption(
@@ -43,6 +48,7 @@ st.dataframe(
         ),
         "yargıç_maliyeti": st.column_config.NumberColumn("yargıç (ölçüm)", format="$%.4f"),
         "ort_süre": st.column_config.NumberColumn("ort. süre (sn)", format="%.2f"),
+        "ort_arama": st.column_config.NumberColumn("ort. arama", format="%.1f"),
     },
 )
 
@@ -50,7 +56,7 @@ st.subheader("Kalite ve maliyet")
 chart = table.assign(grup=table["pareto"].map({"⭐": "Pareto sınırında", "": "diğer"}))
 points = (
     alt.Chart(chart)
-    .mark_circle(size=220, opacity=0.85)
+    .mark_point(size=220, opacity=0.85, filled=True)  # mark_circle şekli yok sayar
     .encode(
         x=alt.X(
             "soru_başı_cevap_maliyeti:Q",
@@ -59,7 +65,15 @@ points = (
         ),
         y=alt.Y("kalite:Q", title="Kalite", scale=alt.Scale(domain=[0, 1.05])),
         color=alt.Color("grup:N", title=None),
-        tooltip=["çalıştırma", "cevap_modeli", "k", alt.Tooltip("kalite:Q", format=".0%")],
+        shape=alt.Shape("yöntem:N", title="Yöntem"),
+        tooltip=[
+            "çalıştırma",
+            "yöntem",
+            "cevap_modeli",
+            "k",
+            alt.Tooltip("kalite:Q", format=".0%"),
+            alt.Tooltip("ort_arama:Q", title="ort. arama", format=".1f"),
+        ],
     )
 )
 st.altair_chart(points, height=320)
@@ -67,9 +81,12 @@ st.caption("Sol üst köşe en iyisi: ucuz ve kaliteli. Sağ alttaki bir nokta h
 
 if len(runs) >= 2:
     st.subheader("İki çalıştırmayı soru soru karşılaştır")
+    rows_by_id = {row["çalıştırma"]: row for row in runs_table(runs)}
     labels = {
-        r.run_id: f"{r.run_id} · {r.setup.get('cevap_modeli', '?')} · k={r.setup.get('k', '?')}"
-        for r in runs
+        run_id: (
+            f"{run_id} · {row['yöntem']} · {row.get('cevap_modeli', '?')} · k={row.get('k', '?')}"
+        )
+        for run_id, row in rows_by_id.items()
     }
     ids = list(labels)
     col_old, col_new = st.columns(2)
@@ -79,6 +96,19 @@ if len(runs) >= 2:
     diff = pd.DataFrame(compare_runs(by_id[old_id], by_id[new_id]))
     fixed, broken = (diff["değişim"] == "düzeldi").sum(), (diff["değişim"] == "bozuldu").sum()
     st.markdown(f"**{fixed}** soru düzeldi, **{broken}** soru bozuldu.")
+    old_row, new_row = rows_by_id[old_id], rows_by_id[new_id]
+
+    def ratio(column: str) -> str:
+        """Yeni / eski oranı. Eski değer 0 ise (örn. ücretsiz Ollama) oran anlamsız."""
+        old_value = old_row[column]
+        return f"{new_row[column] / old_value:.1f}x" if old_value else "–"
+
+    col_cost, col_time, col_search = st.columns(3)
+    col_cost.metric("Soru başı maliyet (yeni / eski)", ratio("soru_başı_cevap_maliyeti"))
+    col_time.metric("Ort. süre (yeni / eski)", ratio("ort_süre"))
+    col_search.metric(
+        "Ort. arama (eski → yeni)", f"{old_row['ort_arama']:.1f} → {new_row['ort_arama']:.1f}"
+    )
     only_changed = st.toggle("Sadece değişen soruları göster", value=True)
     if only_changed:
         diff = diff[diff["değişim"] != ""]

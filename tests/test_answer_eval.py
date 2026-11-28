@@ -3,13 +3,16 @@
 import numpy as np
 from conftest import FakeLLM, make_response
 
+from llm_toolkit.agent import Limits
 from llm_toolkit.answer_eval import (
+    evaluate_agent_answer,
     evaluate_answer,
     is_refusal,
     keyword_score,
     summarize_answers,
 )
 from llm_toolkit.chunking import Chunk
+from llm_toolkit.datatypes import ToolCall
 from llm_toolkit.embeddings import EmbeddingResult
 from llm_toolkit.evalset import EvalQuestion
 from llm_toolkit.vector_store import VectorStore
@@ -98,3 +101,56 @@ def test_summarize_answers():
     assert rows["tümü"]["ifade_başarısı"] == 0.5
     assert rows["yok"]["ifade_başarısı"] == 0.0
     assert rows["tümü"]["maliyet"] == 0.002
+
+
+# --- Agent'ı ölçmek (Ders 5.4) ---
+
+
+def search(query: str, call_id: str = "c1"):
+    """Sahte agent modelinin 'belgelerde_ara' aracını çağırdığı bir cevap."""
+    call = ToolCall(id=call_id, name="belgelerde_ara", arguments={"query": query})
+    return make_response(tool_calls=[call])
+
+
+def test_fixed_rag_counts_one_search_and_one_call():
+    answer = FakeLLM([make_response("14 gün [d0.md #0].")])
+    result = evaluate_answer(IADE, STORE, KeywordEmbedder(), answer, k=1)
+    assert (result.searches, result.model_calls, result.stop_reason) == (1, 1, "cevap")
+
+
+def test_agent_answer_is_scored_like_fixed_rag():
+    agent = FakeLLM([search("iade"), make_response("İade süresi 14 gündür [d0.md #0].")])
+    judge = FakeLLM([make_response(VERDICT_OK)])
+    result = evaluate_agent_answer(IADE, STORE, KeywordEmbedder(), agent, judge=judge, k=1)
+    assert result.keyword_pass and result.verdict.correct
+    assert (result.searches, result.model_calls, result.stop_reason) == (1, 2, "cevap")
+    assert result.answer_cost == 0.002  # İki agent çağrısı; yargıç ayrı
+    assert result.judge_cost == 0.001
+    # Yargıç, agent'ın aramada bulduğu kaynağı görmeli
+    assert "d0.md #0" in judge.calls[0][0].content
+
+
+def test_judge_sees_sources_from_all_agent_searches_once():
+    agent = FakeLLM(
+        [
+            search("iade", "c1"),
+            search("kargo", "c2"),
+            search("iade", "c3"),  # Aynı parça ikinci kez geliyor
+            make_response("14 gün [d0.md #0], 39,90 TL [d1.md #0]."),
+        ]
+    )
+    judge = FakeLLM([make_response(VERDICT_OK)])
+    result = evaluate_agent_answer(IADE, STORE, KeywordEmbedder(), agent, judge=judge, k=1)
+    prompt = judge.calls[0][0].content
+    assert result.searches == 3
+    assert prompt.count('<kaynak id="d0.md #0">') == 1  # Tekrarlanan parça bir kez
+    assert '<kaynak id="d1.md #0">' in prompt
+
+
+def test_agent_that_hits_a_limit_is_recorded():
+    agent = FakeLLM([search("a", "c1"), make_response("Kısmi cevap.")])
+    result = evaluate_agent_answer(
+        IADE, STORE, KeywordEmbedder(), agent, k=1, limits=Limits(max_steps=1)
+    )
+    assert result.stop_reason == "adım"
+    assert not result.keyword_pass

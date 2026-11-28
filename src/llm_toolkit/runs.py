@@ -91,12 +91,14 @@ def runs_table(runs: list[RunRecord]) -> list[dict[str, Any]]:
     """Her çalıştırma için bir satır: ayarlar + özet ölçütler + Pareto bilgisi.
 
     Pareto sınırı (kalite, soru başı cevap maliyeti) ile çizilir; yargıç maliyeti ayrı sütunda.
+    Ders 5.4'ten önceki kayıtlarda "yöntem" yok; onlar sabit RAG'dır (setup varsa onu kullanır).
     """
     points = [(quality(r.summary), answer_cost_per_question(r)) for r in runs]
     front = pareto_front(points)
     return [
         {
             "çalıştırma": r.run_id,
+            "yöntem": "sabit RAG",
             **r.setup,
             "kalite": q,
             "ifade_başarısı": r.summary["ifade_başarısı"],
@@ -104,6 +106,7 @@ def runs_table(runs: list[RunRecord]) -> list[dict[str, Any]]:
             "soru_başı_cevap_maliyeti": c,
             "yargıç_maliyeti": sum(x.judge_cost for x in r.results),
             "ort_süre": r.summary["ort_süre"],
+            "ort_arama": sum(x.searches for x in r.results) / len(r.results),
             "pareto": on_front,
         }
         for r, (q, c), on_front in zip(runs, points, front, strict=True)
